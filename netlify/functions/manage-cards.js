@@ -24,6 +24,46 @@ export default async (req, context) => {
     return cards;
   }
 
+  // 核心辅助函数：带重试的更新操作
+  // updateFn: 一个函数，接收当前数据，返回修改后的数据
+  async function updateWithRetry(key, updateFn, maxRetries = 5) {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        // 1. 获取当前数据和 ETag (Metadata)
+        // 注意：Netlify Blobs 的 getWithMetadata 返回 { data, etag }
+        const { data, etag } = await store.getWithMetadata(key, { type: "json" });
+        
+        if (!data) {
+            throw new Error("Card not found");
+        }
+
+        // 2. 应用修改逻辑
+        const newData = updateFn(data);
+
+        // 3. 尝试带 ETag 写入
+        await store.setJSON(key, newData, { onlyIfMatch: etag });
+        
+        // 成功则直接返回
+        return newData;
+      } catch (err) {
+        // 4. 检查是否是并发冲突 (412 Precondition Failed 或类似错误)
+        // Netlify Blobs 在 ETag 不匹配时会抛出错误
+        const isConflict = err.status === 412 || (err.message && (err.message.includes("etag") || err.message.includes("condition")));
+        
+        if (isConflict) {
+          // 如果是冲突，且还有重试机会，则 continue 继续下一次循环
+          if (i < maxRetries - 1) {
+            // 可以稍微等待一下，避开高峰（指数退避），这里简单处理
+            await new Promise(r => setTimeout(r, Math.random() * 50)); 
+            continue;
+          }
+        }
+        // 其他错误或重试耗尽，抛出
+        throw err;
+      }
+    }
+  }
+
   // 处理 GET 请求：获取所有数据
   if (req.method === "GET") {
     try {
@@ -59,11 +99,25 @@ export default async (req, context) => {
         if (!card || !card.id) {
           return new Response(JSON.stringify({ error: "Invalid card data" }), { status: 400 });
         }
-        // 使用卡片 ID 作为文件名，确保唯一性
         const key = `${PREFIX}${card.id}.json`;
         
-        // 写入单个文件，原子操作，互不影响
-        await store.setJSON(key, card);
+        // 检查文件是否存在，如果存在则需要合并
+        const exists = await store.getMetadata(key);
+        
+        if (exists) {
+            // 如果是编辑现有卡片，使用重试逻辑进行合并
+            await updateWithRetry(key, (currentData) => {
+                return {
+                    ...currentData,     // 保留原有数据（如 likes, createdAt）
+                    ...card,            // 覆盖用户编辑的字段（title, template 等）
+                    likes: currentData.likes || 0, // 强制保留服务器端的点赞数
+                    createdAt: currentData.createdAt || card.createdAt // 保持创建时间不变
+                };
+            });
+        } else {
+            // 如果是纯新增，直接写入
+            await store.setJSON(key, card);
+        }
         
         return new Response(JSON.stringify({ success: true }), {
           headers: { "Content-Type": "application/json" },
@@ -76,16 +130,17 @@ export default async (req, context) => {
         }
         const key = `${PREFIX}${id}.json`;
         
-        // 点赞需要先读后写
-        const currentCard = await store.get(key, { type: "json" });
-        if (currentCard) {
-            currentCard.likes = (currentCard.likes || 0) + 1;
-            await store.setJSON(key, currentCard);
-        }
-        
-        return new Response(JSON.stringify({ success: true }), {
-          headers: { "Content-Type": "application/json" },
-        });
+        // 使用重试逻辑处理点赞
+        await updateWithRetry(key, (currentData) => {
+             return {
+                 ...currentData,
+                 likes: (currentData.likes || 0) + 1
+             };
+         });
+         
+         return new Response(JSON.stringify({ success: true }), {
+            headers: { "Content-Type": "application/json" },
+         });
       }
 
       return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400 });
