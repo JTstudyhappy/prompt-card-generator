@@ -197,102 +197,52 @@ document.addEventListener('DOMContentLoaded', () => {
     async function saveCards(newCard = null, deletedCardId = null, retryCount = 0, isLikeAction = false) {
         loader.style.display = 'flex'; // 显示加载动画
         try {
-            // 1. 先从云端拉取最新数据 (获取最新的 ETag)
-            const responseGet = await fetch('/.netlify/functions/manage-cards');
-            let latestCards = [];
-            let latestEtag = null;
-
-            if (responseGet.ok) {
-                const result = await responseGet.json();
-                const data = result.data;
-                latestEtag = result.etag;
-
-                if (data && Array.isArray(data)) {
-                    latestCards = data;
-                }
-            }
-
-            // 如果云端是空的（第一次），可能需要用默认数据或当前本地数据作为基础
-            if (latestCards.length === 0) {
-                latestCards = [...cards]; 
-            }
-
-            // 2. 在最新数据的基础上进行增删改
-            if (newCard) {
-                // 如果是编辑（检查ID是否存在）
-                const index = latestCards.findIndex(c => c.id === newCard.id);
-                if (index !== -1) {
-                    if (isLikeAction) {
-                        // 点赞操作：基于服务器最新数据 +1
-                        latestCards[index].likes = (latestCards[index].likes || 0) + 1;
-                    } else {
-                        // 编辑操作：保留服务器端的点赞数和创建时间
-                        latestCards[index] = {
-                            ...latestCards[index],
-                            ...newCard,
-                            likes: latestCards[index].likes || 0, 
-                            createdAt: latestCards[index].createdAt || Date.now()
-                        };
-                    }
-                } else {
-                    latestCards.push(newCard); // 新增
-                }
-            }
-
+            // 构造请求 payload
+            let payload = {};
             if (deletedCardId) {
-                latestCards = latestCards.filter(c => c.id !== deletedCardId);
+                payload = { action: 'delete', cardId: deletedCardId };
+            } else if (isLikeAction && newCard) {
+                payload = { action: 'like', cardId: newCard.id };
+            } else if (newCard) {
+                payload = { action: 'upsert', card: newCard };
+            } else {
+                // 没有操作？直接返回
+                loader.style.display = 'none';
+                return;
             }
 
-            // 3. 更新本地状态
-            // 再次补全数据，防止合并过程中丢失
-            cards = latestCards.map(c => ({
-                ...c,
-                createdAt: c.createdAt || Date.now(),
-                likes: c.likes || 0
-            }));
-            currentEtag = latestEtag; // 更新本地 ETag
-            renderCards();
-            
-            // 4. 同步回云端 (带上 ETag)
+            // 发送操作指令给后端
             const responsePost = await fetch('/.netlify/functions/manage-cards', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    data: cards,
-                    etag: latestEtag // 告诉后端：我是基于这个版本修改的
-                })
+                body: JSON.stringify(payload)
             });
-            
-            if (responsePost.status === 409) {
-                // 冲突！说明在刚才那几毫秒里，又有人修改了数据
-                if (retryCount < 3) {
-                    console.warn(`版本冲突，正在进行第 ${retryCount + 1} 次自动重试...`);
-                    // 递归调用自己，重新拉取、合并、保存
-                    await saveCards(newCard, deletedCardId, retryCount + 1, isLikeAction);
-                    return;
-                } else {
-                    throw new Error('服务器繁忙，多人同时操作冲突，请稍后再试。');
-                }
-            }
 
             if (!responsePost.ok) {
-                // 尝试获取更详细的错误信息
                 let errorMsg = `Status: ${responsePost.status}`;
                 try {
                     const errData = await responsePost.json();
                     if (errData.error) errorMsg += ` - ${errData.error}`;
-                } catch (e) {
-                    // 忽略 JSON 解析错误
+                } catch (e) { }
+                
+                if (responsePost.status === 409) {
+                    throw new Error('服务器繁忙，多人同时操作冲突，请稍后再试。');
                 }
                 throw new Error(errorMsg);
             }
+
+            // 成功！后端会返回最新的完整数据
+            const result = await responsePost.json();
+            if (result.success && result.data) {
+                cards = result.data; // 更新本地数据
+                renderCards(); // 重新渲染
+            }
+
         } catch (error) {
             console.error('保存失败:', error);
-            alert(`保存到云端失败: ${error.message}\n请截图此错误信息以便排查。`);
+            alert(`保存到云端失败: ${error.message}`);
         } finally {
-            if (retryCount === 0) { // 只有最外层调用才关闭 loading
-                loader.style.display = 'none';
-            }
+            loader.style.display = 'none';
         }
     }
 
@@ -701,8 +651,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 exampleText,
                 exampleImage: imagePath,
                 hue: getRandomHue(),
-                createdAt: Date.now(), // 新增创建时间
-                likes: 0 // 新增点赞数
+                // createdAt: Date.now(), // 移除：由后端处理
+                // likes: 0 // 移除：由后端处理
             };
         }
 
