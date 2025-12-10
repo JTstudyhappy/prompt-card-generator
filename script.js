@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 加载数据
     // let cards = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultCards;
     let cards = []; // 先初始化为空，等待从云端加载
-    let currentEtag = null; // 保存当前数据的版本号
+    // let currentEtag = null; // 移除 ETag
     let editingCardId = null; // 当前正在编辑的卡片ID
 
     // --- DOM 元素 ---
@@ -161,9 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/.netlify/functions/manage-cards');
             if (response.ok) {
                 const result = await response.json();
-                // 后端现在返回 { data: [...], etag: "..." }
+                // 后端现在返回 { data: [...] }
                 const data = result.data;
-                currentEtag = result.etag;
+                // currentEtag = result.etag; // 移除
 
                 if (data && Array.isArray(data) && data.length > 0) {
                     // 数据迁移：补全旧数据的日期和点赞数
@@ -173,11 +173,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         likes: card.likes || 0 // 如果没有点赞，补0
                     }));
                 } else {
-                    cards = defaultCards.map(card => ({
-                        ...card,
-                        createdAt: Date.now(),
-                        likes: 0
-                    }));
+                    // 如果云端没有数据，不使用默认数据覆盖，而是显示空（或者你可以选择初始化默认数据并上传）
+                    // 这里为了演示清晰，如果云端为空，就显示空，或者仅在第一次手动初始化
+                    // 为了保持体验，如果云端真的一张卡都没有，可以显示默认卡片，但不要自动上传，除非用户操作
+                    if (data && data.length === 0) {
+                         cards = defaultCards.map(card => ({
+                            ...card,
+                            createdAt: Date.now(),
+                            likes: 0
+                        }));
+                    } else {
+                        cards = [];
+                    }
                 }
             } else {
                 console.warn('无法从云端加载数据，使用默认数据');
@@ -193,56 +200,81 @@ document.addEventListener('DOMContentLoaded', () => {
         return cards; // 返回加载的数据
     }
 
-    // 核心修改：保存前先拉取最新数据，进行合并
+    // 核心修改：改为发送操作指令，而不是全量数据
     async function saveCards(newCard = null, deletedCardId = null, retryCount = 0, isLikeAction = false) {
-        loader.style.display = 'flex'; // 显示加载动画
+        loader.style.display = 'flex'; 
         try {
-            // 构造请求 payload
+            let action = '';
             let payload = {};
+
             if (deletedCardId) {
-                payload = { action: 'delete', cardId: deletedCardId };
-            } else if (isLikeAction && newCard) {
-                payload = { action: 'like', cardId: newCard.id };
+                action = 'delete';
+                payload = { id: deletedCardId };
+                
+                // 乐观更新本地 UI
+                cards = cards.filter(c => c.id !== deletedCardId);
             } else if (newCard) {
-                payload = { action: 'upsert', card: newCard };
-            } else {
-                // 没有操作？直接返回
-                loader.style.display = 'none';
-                return;
+                if (isLikeAction) {
+                    action = 'like';
+                    payload = { id: newCard.id };
+                    
+                    // 乐观更新本地 UI
+                    const index = cards.findIndex(c => c.id === newCard.id);
+                    if (index !== -1) {
+                        cards[index].likes = (cards[index].likes || 0) + 1;
+                    }
+                } else {
+                    action = 'save';
+                    // 确保有 ID
+                    if (!newCard.id) {
+                        newCard.id = Date.now().toString(); // 使用时间戳作为 ID
+                    }
+                    // 确保有创建时间
+                    if (!newCard.createdAt) {
+                        newCard.createdAt = Date.now();
+                    }
+                    
+                    payload = { card: newCard };
+
+                    // 乐观更新本地 UI
+                    const index = cards.findIndex(c => c.id === newCard.id);
+                    if (index !== -1) {
+                        cards[index] = { ...cards[index], ...newCard };
+                    } else {
+                        cards.push(newCard);
+                    }
+                }
             }
 
-            // 发送操作指令给后端
-            const responsePost = await fetch('/.netlify/functions/manage-cards', {
+            renderCards(); // 立即渲染本地变化
+
+            // 发送请求
+            const response = await fetch('/.netlify/functions/manage-cards', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    action: action,
+                    ...payload
+                })
             });
-
-            if (!responsePost.ok) {
-                let errorMsg = `Status: ${responsePost.status}`;
-                try {
-                    const errData = await responsePost.json();
-                    if (errData.error) errorMsg += ` - ${errData.error}`;
-                } catch (e) { }
-                
-                if (responsePost.status === 409) {
-                    throw new Error('服务器繁忙，多人同时操作冲突，请稍后再试。');
-                }
-                throw new Error(errorMsg);
+            
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || `Status: ${response.status}`);
             }
 
-            // 成功！后端会返回最新的完整数据
-            const result = await responsePost.json();
-            if (result.success && result.data) {
-                cards = result.data; // 更新本地数据
-                renderCards(); // 重新渲染
-            }
+            // 如果是保存操作，为了保险起见，可以重新拉取一次最新数据（可选，视一致性要求而定）
+            // await loadCards(); 
 
         } catch (error) {
-            console.error('保存失败:', error);
-            alert(`保存到云端失败: ${error.message}`);
+            console.error('操作失败:', error);
+            alert(`操作失败: ${error.message}`);
+            // 如果失败，最好回滚本地状态（这里简化处理，重新加载一次）
+            await loadCards();
         } finally {
-            loader.style.display = 'none';
+            if (retryCount === 0) { 
+                loader.style.display = 'none';
+            }
         }
     }
 
@@ -651,8 +683,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 exampleText,
                 exampleImage: imagePath,
                 hue: getRandomHue(),
-                // createdAt: Date.now(), // 移除：由后端处理
-                // likes: 0 // 移除：由后端处理
+                createdAt: Date.now(), // 新增创建时间
+                likes: 0 // 新增点赞数
             };
         }
 
