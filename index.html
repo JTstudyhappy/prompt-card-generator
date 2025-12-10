@@ -9,12 +9,39 @@
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 </head>
 <body class="light-mode">
+    <!-- 全局加载遮罩 -->
+    <div id="global-loader" class="loader-overlay" style="display: none;">
+        <div class="loader-content">
+            <div class="gear-spinner">⚙️</div>
+            <p>正在同步数据...</p>
+        </div>
+    </div>
+
     <header>
-        <h1>Prompt Card Generator</h1>
+        <div class="header-content">
+            <h1>Prompt Card Commune</h1>
+            <p class="subtitle">共建共治共享</p>
+        </div>
         <button id="theme-toggle" class="theme-btn">切换夜间模式</button>
     </header>
 
+    <div class="notice-bar">
+        <p>本服务基于 Gemini 2.0 Flash 和 Netlify 搭建，收集群友们的焚诀智慧+标准化提示词使用与一键复制</p>
+        <p>上传卡片使用电脑的成功率更高，上传卡片可能需要一定时间（同步）</p>
+        <p>手机的话，可以尝试 WiFi，会比数据流量成功率更高</p>
+    </div>
+
     <main>
+        <div class="filter-bar">
+            <button class="filter-btn active" data-filter="all">全部</button>
+            <button class="filter-btn" data-filter="人像编辑">人像编辑</button>
+            <button class="filter-btn" data-filter="N图合一">N图合一</button>
+            <button class="filter-btn" data-filter="画风转绘">画风转绘</button>
+            <button class="filter-btn" data-filter="创意玩法">创意玩法</button>
+            <button class="filter-btn" data-filter="视频类">视频类</button>
+            <button class="filter-btn" data-filter="焚天">焚天</button>
+        </div>
+
         <div id="card-container" class="card-container">
             <!-- 新建卡片按钮将作为第一个元素被渲染 -->
             <div class="card create-card-btn" id="open-create-modal">
@@ -42,7 +69,9 @@
                         <option value="人像编辑">人像编辑</option>
                         <option value="N图合一">N图合一</option>
                         <option value="画风转绘">画风转绘</option>
-                        <option value="焚天">焚天</option>
+                        <option value="创意玩法">创意玩法</option>
+                        <option value="视频类">视频类</option>
+                        <option value="焚天">焚天（不知道选什么的时候就选这个）</option>
                     </select>
                 </div>
 

@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 加载数据
     // let cards = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultCards;
     let cards = []; // 先初始化为空，等待从云端加载
+    let currentEtag = null; // 保存当前数据的版本号
     let editingCardId = null; // 当前正在编辑的卡片ID
 
     // --- DOM 元素 ---
@@ -54,6 +55,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const imagePreviewContainer = document.getElementById('image-preview-container');
     const imagePreview = document.getElementById('image-preview');
     const uploadStatus = document.getElementById('upload-status'); // 新增状态显示元素
+    const loader = document.getElementById('global-loader'); // 全局加载器
+    const filterBtns = document.querySelectorAll('.filter-btn'); // 筛选按钮
 
     // --- 辅助函数 ---
     function getRandomHue() {
@@ -120,6 +123,8 @@ document.addEventListener('DOMContentLoaded', () => {
             case '人像编辑': return 'tag-portrait';
             case 'N图合一': return 'tag-n-in-1';
             case '画风转绘': return 'tag-style-transfer';
+            case '创意玩法': return 'tag-creative';
+            case '视频类': return 'tag-video';
             case '焚天': return 'tag-burning-sky';
             default: return '';
         }
@@ -150,15 +155,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 数据同步逻辑 ---
     async function loadCards() {
+        loader.style.display = 'flex'; // 显示加载动画
         try {
             // 显示加载中提示（可选）
             const response = await fetch('/.netlify/functions/manage-cards');
             if (response.ok) {
-                const data = await response.json();
+                const result = await response.json();
+                // 后端现在返回 { data: [...], etag: "..." }
+                const data = result.data;
+                currentEtag = result.etag;
+
                 if (data && Array.isArray(data) && data.length > 0) {
-                    cards = data;
+                    // 数据迁移：补全旧数据的日期和点赞数
+                    cards = data.map(card => ({
+                        ...card,
+                        createdAt: card.createdAt || Date.now(), // 如果没有日期，补当前时间
+                        likes: card.likes || 0 // 如果没有点赞，补0
+                    }));
                 } else {
-                    cards = defaultCards; // 如果云端没数据，用默认的
+                    cards = defaultCards.map(card => ({
+                        ...card,
+                        createdAt: Date.now(),
+                        likes: 0
+                    }));
                 }
             } else {
                 console.warn('无法从云端加载数据，使用默认数据');
@@ -167,19 +186,27 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('加载数据出错:', error);
             cards = defaultCards;
+        } finally {
+            loader.style.display = 'none'; // 隐藏加载动画
         }
         renderCards();
         return cards; // 返回加载的数据
     }
 
     // 核心修改：保存前先拉取最新数据，进行合并
-    async function saveCards(newCard = null, deletedCardId = null) {
+    async function saveCards(newCard = null, deletedCardId = null, retryCount = 0) {
+        loader.style.display = 'flex'; // 显示加载动画
         try {
-            // 1. 先从云端拉取最新数据
+            // 1. 先从云端拉取最新数据 (获取最新的 ETag)
             const responseGet = await fetch('/.netlify/functions/manage-cards');
             let latestCards = [];
+            let latestEtag = null;
+
             if (responseGet.ok) {
-                const data = await responseGet.json();
+                const result = await responseGet.json();
+                const data = result.data;
+                latestEtag = result.etag;
+
                 if (data && Array.isArray(data)) {
                     latestCards = data;
                 }
@@ -195,7 +222,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 如果是编辑（检查ID是否存在）
                 const index = latestCards.findIndex(c => c.id === newCard.id);
                 if (index !== -1) {
-                    latestCards[index] = newCard; // 更新
+                    // 编辑时，保留原有的点赞数和创建时间（除非 newCard 里已经有了）
+                    latestCards[index] = {
+                        ...latestCards[index],
+                        ...newCard,
+                        likes: latestCards[index].likes || 0, // 确保点赞数不丢失
+                        createdAt: latestCards[index].createdAt || Date.now()
+                    };
                 } else {
                     latestCards.push(newCard); // 新增
                 }
@@ -206,16 +239,37 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // 3. 更新本地状态
-            cards = latestCards;
+            // 再次补全数据，防止合并过程中丢失
+            cards = latestCards.map(c => ({
+                ...c,
+                createdAt: c.createdAt || Date.now(),
+                likes: c.likes || 0
+            }));
+            currentEtag = latestEtag; // 更新本地 ETag
             renderCards();
             
-            // 4. 同步回云端
+            // 4. 同步回云端 (带上 ETag)
             const responsePost = await fetch('/.netlify/functions/manage-cards', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(cards)
+                body: JSON.stringify({
+                    data: cards,
+                    etag: latestEtag // 告诉后端：我是基于这个版本修改的
+                })
             });
             
+            if (responsePost.status === 409) {
+                // 冲突！说明在刚才那几毫秒里，又有人修改了数据
+                if (retryCount < 3) {
+                    console.warn(`版本冲突，正在进行第 ${retryCount + 1} 次自动重试...`);
+                    // 递归调用自己，重新拉取、合并、保存
+                    await saveCards(newCard, deletedCardId, retryCount + 1);
+                    return;
+                } else {
+                    throw new Error('服务器繁忙，多人同时操作冲突，请稍后再试。');
+                }
+            }
+
             if (!responsePost.ok) {
                 // 尝试获取更详细的错误信息
                 let errorMsg = `Status: ${responsePost.status}`;
@@ -230,8 +284,27 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('保存失败:', error);
             alert(`保存到云端失败: ${error.message}\n请截图此错误信息以便排查。`);
+        } finally {
+            if (retryCount === 0) { // 只有最外层调用才关闭 loading
+                loader.style.display = 'none';
+            }
         }
     }
+
+    // --- 筛选逻辑 ---
+    let currentFilter = 'all';
+
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // 移除所有 active 类
+            filterBtns.forEach(b => b.classList.remove('active'));
+            // 给当前点击的按钮添加 active 类
+            btn.classList.add('active');
+            
+            currentFilter = btn.dataset.filter;
+            renderCards();
+        });
+    });
 
     // --- 渲染逻辑 ---
     function renderCards() {
@@ -239,7 +312,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const existingCards = cardContainer.querySelectorAll('.card:not(.create-card-btn)');
         existingCards.forEach(card => card.remove());
 
-        cards.forEach(card => {
+        // 1. 筛选
+        let filteredCards = cards;
+        if (currentFilter !== 'all') {
+            filteredCards = cards.filter(card => card.type === currentFilter);
+        }
+
+        // 2. 排序：按创建时间倒序（新的在前）
+        filteredCards.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+        filteredCards.forEach(card => {
             const cardEl = createCardElement(card);
             cardContainer.appendChild(cardEl);
         });
@@ -298,6 +380,9 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         ` : '';
 
+        // 日期格式化
+        const dateStr = new Date(card.createdAt || Date.now()).toLocaleDateString();
+
         el.innerHTML = `
             <div class="card-controls">
                 <button class="control-btn edit-btn" title="编辑">
@@ -309,6 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="card-header">
                 <h3 class="card-title">${escapeHtml(card.title)}</h3>
+                <div class="card-date">${dateStr}</div>
             </div>
             <div class="card-meta">
                 <span class="card-tag ${typeClass}">${card.type}</span>
@@ -330,11 +416,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p class="example-text">${escapeHtml(card.exampleText)}</p>
                 ${imgHtml}
             </div>
+
+            <div class="card-footer">
+                <button class="like-btn ${isLiked(card.id) ? 'liked' : ''}" data-id="${card.id}">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="${isLiked(card.id) ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+                    <span class="like-count">${card.likes || 0}</span>
+                </button>
+            </div>
         `;
 
         // 绑定事件
         const copyBtn = el.querySelector('.copy-btn');
         copyBtn.addEventListener('click', () => copyPrompt(card, el));
+
+        // 点赞事件
+        const likeBtn = el.querySelector('.like-btn');
+        likeBtn.addEventListener('click', () => handleLike(card));
 
         const toggleBtn = el.querySelector('.toggle-example-btn');
         const exampleSection = el.querySelector('.example-section');
@@ -578,7 +675,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 编辑模式：找到旧卡片的数据（为了保留 hue 等未修改字段）
             const oldCard = cards.find(c => c.id === editingCardId) || {};
             cardToSave = {
-                ...oldCard, // 保留原有的 ID, hue 等
+                ...oldCard, // 保留原有的 ID, hue, likes, createdAt 等
                 title,
                 type,
                 contributor,
@@ -598,7 +695,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 precautions,
                 exampleText,
                 exampleImage: imagePath,
-                hue: getRandomHue()
+                hue: getRandomHue(),
+                createdAt: Date.now(), // 新增创建时间
+                likes: 0 // 新增点赞数
             };
         }
 
@@ -608,6 +707,43 @@ document.addEventListener('DOMContentLoaded', () => {
         createModal.style.display = 'none';
         createForm.reset();
     });
+
+    // --- 点赞逻辑 ---
+    // 本地存储已点赞的卡片ID，防止重复点赞（简单防刷）
+    function isLiked(cardId) {
+        const likedCards = JSON.parse(localStorage.getItem('liked_cards') || '[]');
+        return likedCards.includes(cardId);
+    }
+
+    function handleLike(card) {
+        if (isLiked(card.id)) {
+            alert('你已经点过赞了！');
+            return;
+        }
+
+        // 乐观更新 UI
+        const likeBtn = document.querySelector(`.card[data-id="${card.id}"] .like-btn`);
+        if (likeBtn) {
+            likeBtn.classList.add('liked');
+            const countSpan = likeBtn.querySelector('.like-count');
+            countSpan.textContent = (parseInt(countSpan.textContent) || 0) + 1;
+        }
+
+        // 记录本地状态
+        const likedCards = JSON.parse(localStorage.getItem('liked_cards') || '[]');
+        likedCards.push(card.id);
+        localStorage.setItem('liked_cards', JSON.stringify(likedCards));
+
+        // 更新数据并保存
+        // 注意：这里我们只更新 likes 字段，不修改其他内容
+        const updatedCard = {
+            ...card,
+            likes: (card.likes || 0) + 1
+        };
+        
+        // 调用 saveCards，利用乐观锁机制同步到云端
+        saveCards(updatedCard);
+    }
 
     // 工具函数：转义 HTML 防止 XSS
     function escapeHtml(text) {

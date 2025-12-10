@@ -101,6 +101,136 @@ header {
     background-color: var(--card-bg);
 }
 
+.subtitle {
+    margin: 5px 0 0 0;
+    font-size: 14px;
+    color: var(--accent-color);
+    font-weight: normal;
+}
+
+.notice-bar {
+    background-color: var(--tag-bg);
+    padding: 15px 40px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+    color: var(--text-color);
+    line-height: 1.6;
+    text-align: center;
+}
+
+.notice-bar p {
+    margin: 4px 0;
+}
+
+.filter-bar {
+    margin-bottom: 24px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.filter-btn {
+    padding: 6px 16px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    color: var(--text-color);
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.filter-btn:hover, .filter-btn.active {
+    background: var(--accent-color);
+    color: #fff;
+    border-color: var(--accent-color);
+}
+
+/* 加载遮罩 */
+.loader-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(2px);
+}
+
+.loader-content {
+    background: var(--card-bg);
+    padding: 20px 40px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+.gear-spinner {
+    font-size: 40px;
+    animation: spin 2s linear infinite;
+    margin-bottom: 10px;
+    display: inline-block;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 卡片新样式 */
+.card-date {
+    font-size: 11px;
+    color: #999;
+    margin-top: 2px;
+}
+
+.like-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-color);
+    transition: all 0.2s;
+}
+
+.like-btn:hover {
+    background: rgba(255, 0, 0, 0.05);
+    border-color: #ff4d4f;
+    color: #ff4d4f;
+}
+
+.like-btn.liked {
+    background: #ff4d4f;
+    border-color: #ff4d4f;
+    color: #fff;
+}
+
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--grid-color);
+}
+
+/* 标签颜色补充 */
+.tag-creative { color: #e91e63; border-color: #e91e63; }
+.tag-video { color: #9c27b0; border-color: #9c27b0; }
+
+body.dark-mode .tag-creative { color: #e91e63; border-color: #e91e63; text-shadow: 0 0 5px #e91e63; }
+body.dark-mode .tag-video { color: #9c27b0; border-color: #9c27b0; text-shadow: 0 0 5px #9c27b0; }
+
 h1 {
     margin: 0;
     font-size: 24px;
