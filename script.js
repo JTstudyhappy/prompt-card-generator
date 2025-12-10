@@ -59,6 +59,61 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.floor(Math.random() * 360);
     }
 
+    // 图片压缩函数
+    function compressImage(file, maxSizeKB = 200, quality = 0.7) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // 如果图片太大，先缩小尺寸 (例如最大宽度 1280)
+                    const MAX_WIDTH = 1280;
+                    if (width > MAX_WIDTH) {
+                        height = Math.round(height * (MAX_WIDTH / width));
+                        width = MAX_WIDTH;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // 递归压缩逻辑
+                    const compress = (q) => {
+                        canvas.toBlob((blob) => {
+                            if (!blob) {
+                                reject(new Error('Canvas to Blob failed'));
+                                return;
+                            }
+                            
+                            if (blob.size / 1024 <= maxSizeKB || q <= 0.1) {
+                                // 转换回 File 对象，保持原文件名
+                                const compressedFile = new File([blob], file.name, {
+                                    type: 'image/jpeg',
+                                    lastModified: Date.now(),
+                                });
+                                resolve(compressedFile);
+                            } else {
+                                // 如果还是太大，降低质量继续压缩
+                                compress(q - 0.1);
+                            }
+                        }, 'image/jpeg', q);
+                    };
+
+                    compress(quality);
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+        });
+    }
+
     function getTypeClass(type) {
         switch (type) {
             case '人像编辑': return 'tag-portrait';
@@ -362,14 +417,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 2. 执行上传
         uploadStatus.style.display = 'block';
-        uploadStatus.textContent = '正在上传图片...';
+        uploadStatus.textContent = '正在压缩并上传图片...';
         uploadStatus.style.color = '#666';
         selectImageBtn.disabled = true;
 
-        const formData = new FormData();
-        formData.append('file', file);
-
         try {
+            // 压缩图片
+            const compressedFile = await compressImage(file, 200); // 目标 200KB
+            console.log(`原始大小: ${(file.size/1024).toFixed(2)}KB, 压缩后: ${(compressedFile.size/1024).toFixed(2)}KB`);
+
+            const formData = new FormData();
+            formData.append('file', compressedFile);
+
             const response = await fetch('/.netlify/functions/upload-image', {
                 method: 'POST',
                 body: formData
