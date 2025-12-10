@@ -30,7 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     // 加载数据
-    let cards = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultCards;
+    // let cards = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultCards;
+    let cards = []; // 先初始化为空，等待从云端加载
     let editingCardId = null; // 当前正在编辑的卡片ID
 
     // --- DOM 元素 ---
@@ -146,6 +147,50 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
         themeToggleBtn.textContent = isDark ? '切换日间模式' : '切换夜间模式';
     });
+
+    // --- 数据同步逻辑 ---
+    async function loadCards() {
+        try {
+            // 显示加载中提示（可选）
+            const response = await fetch('/.netlify/functions/manage-cards');
+            if (response.ok) {
+                const data = await response.json();
+                if (data && Array.isArray(data) && data.length > 0) {
+                    cards = data;
+                } else {
+                    cards = defaultCards; // 如果云端没数据，用默认的
+                }
+            } else {
+                console.warn('无法从云端加载数据，使用默认数据');
+                cards = defaultCards;
+            }
+        } catch (error) {
+            console.error('加载数据出错:', error);
+            cards = defaultCards;
+        }
+        renderCards();
+    }
+
+    async function saveCards() {
+        try {
+            // 先更新本地显示
+            renderCards();
+            
+            // 同步到云端
+            const response = await fetch('/.netlify/functions/manage-cards', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cards)
+            });
+            
+            if (!response.ok) {
+                throw new Error('保存到云端失败');
+            }
+        } catch (error) {
+            console.error('保存失败:', error);
+            alert('保存到云端失败，请检查网络。');
+        }
+    }
 
     // --- 渲染逻辑 ---
     function renderCards() {
@@ -279,8 +324,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (checkPassword()) {
                 if (confirm(`确定要删除卡片 "${card.title}" 吗？`)) {
                     cards = cards.filter(c => c.id !== card.id);
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
-                    renderCards();
+                    // localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+                    saveCards(); // 改为调用 saveCards
+                    // renderCards(); // saveCards 内部已经调用了 renderCards
                 }
             } else {
                 alert("密码错误");
@@ -517,15 +563,12 @@ document.addEventListener('DOMContentLoaded', () => {
             cards.push(newCard);
         }
 
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
-            renderCards();
-            createModal.style.display = 'none';
-            createForm.reset();
-        } catch (err) {
-            console.error('保存失败:', err);
-            alert('保存失败，可能是存储空间不足或数据错误。');
-        }
+        // localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+        // renderCards();
+        saveCards(); // 改为调用 saveCards
+
+        createModal.style.display = 'none';
+        createForm.reset();
     });
 
     // 工具函数：转义 HTML 防止 XSS
@@ -541,5 +584,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 初始化 ---
     initTheme();
-    renderCards();
+    // renderCards(); // 移除直接渲染
+    loadCards(); // 改为异步加载
 });
