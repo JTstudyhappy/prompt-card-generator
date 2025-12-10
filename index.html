@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>提示词卡片生成器</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- 引入像素字体用于夜间模式 -->
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+</head>
+<body class="light-mode">
+    <header>
+        <h1>Prompt Card Generator</h1>
+        <button id="theme-toggle" class="theme-btn">切换夜间模式</button>
+    </header>
+
+    <main>
+        <div id="card-container" class="card-container">
+            <!-- 新建卡片按钮将作为第一个元素被渲染 -->
+            <div class="card create-card-btn" id="open-create-modal">
+                <div class="plus-icon">+</div>
+                <p>新建卡片</p>
+            </div>
+            <!-- 卡片列表将在这里动态生成 -->
+        </div>
+    </main>
+
+    <!-- 创建卡片模态框 -->
+    <div id="create-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>创建新提示词卡片</h2>
+            <form id="create-card-form">
+                <div class="form-group">
+                    <label>卡片标题</label>
+                    <input type="text" id="card-title" required placeholder="例如：真人转绘助手">
+                </div>
+                
+                <div class="form-group">
+                    <label>提示词类型</label>
+                    <select id="card-type" required>
+                        <option value="人像编辑">人像编辑</option>
+                        <option value="N图合一">N图合一</option>
+                        <option value="画风转绘">画风转绘</option>
+                        <option value="焚天">焚天</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>贡献者</label>
+                    <input type="text" id="card-contributor" required placeholder="你的名字">
+                </div>
+
+                <div class="form-group">
+                    <label>核心提示词模版</label>
+                    <div class="template-editor-controls">
+                        <input type="text" id="input-block-label" placeholder="输入框标题 (如: 面部特征)">
+                        <button type="button" id="insert-input-btn">插入自定义输入框</button>
+                    </div>
+                    <p class="hint">在下方文本框中编写模版，点击上方按钮插入可填写的输入框。格式为 {{标题}}。</p>
+                    <textarea id="card-template" rows="6" required placeholder="在这里输入提示词模版..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>注意事项</label>
+                    <textarea id="card-precautions" rows="3" placeholder="例如：使用此提示词时请确保底模为..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>例子展示 - 说明文字</label>
+                    <textarea id="example-text" rows="3" placeholder="生成的提示词示例..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>例子展示 - 图片上传</label>
+                    <div class="image-input-group">
+                        <!-- 隐藏原本的路径输入框，改为只读或隐藏，主要靠上传 -->
+                        <input type="text" id="example-image-path" placeholder="上传后自动生成路径" readonly style="background-color: #f0f0f0; color: #666;">
+                        <input type="file" id="example-image-file" accept="image/*" style="display: none;">
+                        <button type="button" id="select-image-btn" class="secondary-btn">上传图片...</button>
+                    </div>
+                    <p class="hint">点击“上传图片”将图片保存到云端，并自动填入路径。</p>
+                    <div id="upload-status" style="font-size: 0.9em; margin-top: 5px; display: none;"></div>
+                    <div id="image-preview-container" style="margin-top: 10px; display: none;">
+                        <img id="image-preview" src="" alt="预览" style="max-width: 100%; max-height: 200px; border-radius: 4px;">
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-btn">创建卡片</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

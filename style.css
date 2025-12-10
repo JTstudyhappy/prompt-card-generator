@@ -1,0 +1,505 @@
+:root {
+    /* 日间模式变量 - 莫兰迪色系 */
+    --bg-color: #e3e4e6;
+    --grid-color: rgba(0, 0, 0, 0.05);
+    --card-bg: #ffffff;
+    --text-color: #4a4a4a;
+    --accent-color: #7c8c98; /* 莫兰迪蓝灰 */
+    --border-color: #d1d1d1;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --border-radius: 12px;
+    --btn-bg: #7c8c98;
+    --btn-text: #fff;
+    --tag-bg: #f0f2f5;
+    --input-bg: #f9f9f9;
+}
+
+body.dark-mode {
+    /* 夜间模式变量 - 复古像素风 + 赛博朋克金 */
+    --bg-color: #050505;
+    --grid-color: transparent; /* 移除网格 */
+    --card-bg: #111;
+    --text-color: #e0e0e0; /* 基础文字改为白色/浅灰 */
+    --accent-color: #FFD700; /* 强调色保持金黄 */
+    --border-color: #FFD700;
+    --shadow: 0 0 10px rgba(255, 215, 0, 0.1);
+    --font-family: 'VT323', monospace;
+    --border-radius: 0px;
+    --btn-bg: #222;
+    --btn-text: #FFD700;
+    --tag-bg: #222;
+    --input-bg: #000;
+}
+
+/* 夜间模式星空背景 */
+body.dark-mode::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background-image: 
+        radial-gradient(2px 2px at 20px 30px, #ffd700, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 50px 160px, #ffd700, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 130px 80px, #ffd700, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 160px 120px, #fff, rgba(0,0,0,0));
+    background-repeat: repeat;
+    background-size: 200px 200px;
+    animation: twinkle 1.5s infinite; /* 加快动画速度 */
+    z-index: -1;
+    opacity: 0.3;
+}
+
+@keyframes twinkle {
+    0% { opacity: 0.3; transform: translateY(0); }
+    50% { opacity: 0.6; }
+    100% { opacity: 0.3; transform: translateY(-10px); }
+}
+
+@keyframes neon-pulse {
+    0% { box-shadow: 0 0 5px var(--accent-color), inset 0 0 5px var(--accent-color); }
+    50% { box-shadow: 0 0 15px var(--accent-color), inset 0 0 10px var(--accent-color); }
+    100% { box-shadow: 0 0 5px var(--accent-color), inset 0 0 5px var(--accent-color); }
+}
+
+@keyframes border-flow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+* {
+    box-sizing: border-box;
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s, box-shadow 0.3s;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    /* 网格背景 */
+    background-image: 
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    background-size: 20px 20px;
+    color: var(--text-color);
+    font-family: var(--font-family);
+    min-height: 100vh;
+}
+
+header {
+    padding: 20px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--card-bg);
+}
+
+h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.theme-btn {
+    padding: 8px 16px;
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-family: var(--font-family);
+}
+
+main {
+    padding: 40px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.card-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 3列 */
+    gap: 24px;
+    align-items: start; /* 瀑布流对齐 */
+}
+
+/* 响应式调整 */
+@media (max-width: 900px) {
+    .card-container {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 600px) {
+    .card-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 24px; /* 增加内边距 */
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 16px; /* 增加元素间距 */
+    position: relative;
+    overflow: hidden;
+}
+
+/* 新建卡片按钮样式 */
+.create-card-btn {
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    min-height: 200px;
+    border: 2px dashed var(--accent-color);
+    background: transparent;
+}
+
+.create-card-btn:hover {
+    background-color: rgba(124, 140, 152, 0.1);
+}
+
+.plus-icon {
+    font-size: 48px;
+    color: var(--accent-color);
+}
+
+/* 卡片内容样式 */
+.card-header {
+    margin-bottom: 4px;
+    padding-right: 60px; /* 右侧留白给控制按钮 */
+}
+
+.card-title {
+    font-size: 20px; /* 稍微加大标题 */
+    font-weight: bold;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.card-tag {
+    font-size: 12px;
+    padding: 4px 10px;
+    background: var(--tag-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    white-space: nowrap;
+    font-weight: bold;
+}
+
+/* 标签特定颜色 */
+.tag-portrait { color: #4a90e2; border-color: #4a90e2; }
+.tag-n-in-1 { color: #50e3c2; border-color: #50e3c2; }
+.tag-style-transfer { color: #bd10e0; border-color: #bd10e0; }
+.tag-burning-sky { color: #f5a623; border-color: #f5a623; background-color: rgba(245, 166, 35, 0.1); }
+
+/* 夜间模式下的标签颜色调整 */
+body.dark-mode .tag-portrait { color: #4a90e2; border-color: #4a90e2; text-shadow: 0 0 5px #4a90e2; }
+body.dark-mode .tag-n-in-1 { color: #50e3c2; border-color: #50e3c2; text-shadow: 0 0 5px #50e3c2; }
+body.dark-mode .tag-style-transfer { color: #bd10e0; border-color: #bd10e0; text-shadow: 0 0 5px #bd10e0; }
+body.dark-mode .tag-burning-sky { color: #ffae00; border-color: #ffae00; text-shadow: 0 0 8px #ffae00; background: transparent; }
+
+/* 夜间模式文字颜色修正 */
+body.dark-mode .card-title { color: var(--accent-color); } /* 标题保持金色 */
+body.dark-mode .card-contributor { color: #aaa; }
+body.dark-mode .input-group label { color: #ccc; }
+body.dark-mode .template-preview { color: #ddd; }
+body.dark-mode .template-placeholder { color: var(--accent-color); border-color: var(--accent-color); }
+body.dark-mode .precautions-section { background: #1a1a1a; border-color: #333; color: #ccc; }
+
+.card-contributor {
+    font-size: 12px;
+    opacity: 0.7;
+    margin: 0;
+}
+
+.template-preview {
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+    padding: 10px;
+    background: rgba(0,0,0,0.03);
+    border-radius: 4px;
+    white-space: pre-wrap;
+    color: var(--text-color);
+}
+
+.template-placeholder {
+    display: inline-block;
+    padding: 2px;
+    border: 1px dashed var(--accent-color);
+    border-radius: 3px;
+    color: var(--accent-color);
+    font-size: 0.9em;
+    margin: 2px;
+}
+
+.precautions-section {
+    margin-top: 12px;
+    padding: 8px;
+    background: #fff3cd;
+    border: 1px solid #ffeeba;
+    color: #856404;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.precautions-title {
+    font-weight: bold;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.card-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 5px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.card:hover .card-controls {
+    opacity: 1;
+}
+
+.control-btn {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.control-btn:hover {
+    background: var(--accent-color);
+    color: var(--card-bg);
+}
+
+.card-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 10px 0;
+    padding: 15px;
+    border-radius: var(--border-radius);
+    transition: all 0.3s ease;
+}
+
+/* 日间模式：深色低饱和背景 */
+body.light-mode .card-inputs {
+    background-color: hsl(var(--card-hue, 210), 20%, 90%); /* 默认为浅灰 */
+    border: 1px solid transparent;
+}
+/* 如果有自定义色相，覆盖背景 */
+body.light-mode .card[style*="--card-hue"] .card-inputs {
+    background-color: hsl(var(--card-hue), 30%, 30%);
+    color: #fff;
+}
+body.light-mode .card[style*="--card-hue"] .card-inputs label {
+    color: rgba(255,255,255,0.9);
+}
+
+/* 夜间模式：线框 + 荧光光效 */
+body.dark-mode .card-inputs {
+    background: transparent;
+    border: 1px solid var(--accent-color);
+    box-shadow: 0 0 5px var(--accent-color);
+}
+/* 如果有自定义色相，覆盖边框和光效 */
+body.dark-mode .card[style*="--card-hue"] .card-inputs {
+    border-color: hsl(var(--card-hue), 100%, 50%);
+    box-shadow: 0 0 8px hsl(var(--card-hue), 100%, 50%), inset 0 0 5px rgba(0,0,0,0.5);
+    animation: neon-pulse 2s infinite alternate;
+    --accent-color: hsl(var(--card-hue), 100%, 50%); /* 局部覆盖强调色 */
+}
+
+.input-group label {
+    display: block;
+    font-size: 12px;
+    margin-bottom: 4px;
+    font-weight: bold;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--input-bg);
+    color: var(--text-color);
+    border-radius: 4px;
+    font-family: var(--font-family);
+}
+
+/* 夜间模式输入框微调 */
+body.dark-mode .input-group input {
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    background: rgba(0,0,0,0.5);
+}
+body.dark-mode .card[style*="--card-hue"] .input-group input {
+    border-color: hsl(var(--card-hue), 100%, 30%);
+    color: hsl(var(--card-hue), 100%, 70%);
+}
+
+.card-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.action-btn {
+    flex: 1;
+    padding: 8px;
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    text-align: center;
+    font-family: var(--font-family);
+}
+
+.action-btn.secondary {
+    background: transparent;
+    color: var(--text-color);
+}
+
+.example-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-color);
+    display: none; /* 默认隐藏 */
+}
+
+.example-section.show {
+    display: block;
+}
+
+.example-text {
+    font-size: 12px;
+    margin-bottom: 8px;
+    white-space: pre-wrap;
+}
+
+.example-img {
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+/* 模态框样式 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 100;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(5px); /* 毛玻璃效果 */
+}
+
+.modal-content {
+    background-color: var(--card-bg);
+    margin: 5% auto;
+    padding: 30px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    width: 90%;
+    max-width: 600px;
+    box-shadow: var(--shadow);
+    position: relative;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.close-modal {
+    color: var(--text-color);
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input, 
+.form-group select, 
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--input-bg);
+    color: var(--text-color);
+    border-radius: 4px;
+    font-family: var(--font-family);
+}
+
+.template-editor-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+
+.hint {
+    font-size: 12px;
+    opacity: 0.7;
+    margin: 4px 0;
+}
+
+.submit-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 16px;
+    font-family: var(--font-family);
+    margin-top: 10px;
+}
+
+/* 夜间模式下的特殊调整 */
+body.dark-mode .create-card-btn {
+    border-style: solid;
+}
+
+body.dark-mode input, 
+body.dark-mode select, 
+body.dark-mode textarea {
+    border: 1px solid var(--accent-color);
+}

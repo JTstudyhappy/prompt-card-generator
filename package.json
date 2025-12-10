@@ -1,0 +1,9 @@
+{
+  "name": "prompt-card-generator",
+  "version": "1.0.0",
+  "description": "Prompt Card Generator with Netlify Blobs",
+  "main": "index.html",
+  "dependencies": {
+    "@netlify/blobs": "^8.0.0"
+  }
+}

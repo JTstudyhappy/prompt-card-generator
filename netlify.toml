@@ -1,0 +1,7 @@
+[build]
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/images/*"
+  to = "/.netlify/functions/get-image?name=:splat"
+  status = 200
