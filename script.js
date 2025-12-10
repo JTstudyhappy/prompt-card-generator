@@ -169,26 +169,67 @@ document.addEventListener('DOMContentLoaded', () => {
             cards = defaultCards;
         }
         renderCards();
+        return cards; // 返回加载的数据
     }
 
-    async function saveCards() {
+    // 核心修改：保存前先拉取最新数据，进行合并
+    async function saveCards(newCard = null, deletedCardId = null) {
         try {
-            // 先更新本地显示
+            // 1. 先从云端拉取最新数据
+            const responseGet = await fetch('/.netlify/functions/manage-cards');
+            let latestCards = [];
+            if (responseGet.ok) {
+                const data = await responseGet.json();
+                if (data && Array.isArray(data)) {
+                    latestCards = data;
+                }
+            }
+
+            // 如果云端是空的（第一次），可能需要用默认数据或当前本地数据作为基础
+            if (latestCards.length === 0) {
+                latestCards = [...cards]; 
+            }
+
+            // 2. 在最新数据的基础上进行增删改
+            if (newCard) {
+                // 如果是编辑（检查ID是否存在）
+                const index = latestCards.findIndex(c => c.id === newCard.id);
+                if (index !== -1) {
+                    latestCards[index] = newCard; // 更新
+                } else {
+                    latestCards.push(newCard); // 新增
+                }
+            }
+
+            if (deletedCardId) {
+                latestCards = latestCards.filter(c => c.id !== deletedCardId);
+            }
+
+            // 3. 更新本地状态
+            cards = latestCards;
             renderCards();
             
-            // 同步到云端
-            const response = await fetch('/.netlify/functions/manage-cards', {
+            // 4. 同步回云端
+            const responsePost = await fetch('/.netlify/functions/manage-cards', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(cards)
             });
             
-            if (!response.ok) {
-                throw new Error('保存到云端失败');
+            if (!responsePost.ok) {
+                // 尝试获取更详细的错误信息
+                let errorMsg = `Status: ${responsePost.status}`;
+                try {
+                    const errData = await responsePost.json();
+                    if (errData.error) errorMsg += ` - ${errData.error}`;
+                } catch (e) {
+                    // 忽略 JSON 解析错误
+                }
+                throw new Error(errorMsg);
             }
         } catch (error) {
             console.error('保存失败:', error);
-            alert('保存到云端失败，请检查网络。');
+            alert(`保存到云端失败: ${error.message}\n请截图此错误信息以便排查。`);
         }
     }
 
@@ -323,10 +364,9 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteBtn.addEventListener('click', () => {
             if (checkPassword()) {
                 if (confirm(`确定要删除卡片 "${card.title}" 吗？`)) {
-                    cards = cards.filter(c => c.id !== card.id);
-                    // localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
-                    saveCards(); // 改为调用 saveCards
-                    // renderCards(); // saveCards 内部已经调用了 renderCards
+                    // cards = cards.filter(c => c.id !== card.id); // 移除直接修改本地
+                    // saveCards(); 
+                    saveCards(null, card.id); // 传入要删除的ID
                 }
             } else {
                 alert("密码错误");
@@ -515,14 +555,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 创建/编辑卡片提交 ---
     createForm.addEventListener('submit', (e) => {
         e.preventDefault();
-
+        
         const title = document.getElementById('card-title').value;
         const type = document.getElementById('card-type').value;
         const contributor = document.getElementById('card-contributor').value;
         const template = document.getElementById('card-template').value;
         const precautions = document.getElementById('card-precautions').value;
         const exampleText = document.getElementById('example-text').value;
-        const imagePath = imagePathInput.value.trim(); // 获取路径字符串
+        const imagePath = imagePathInput.value.trim();
 
         // 再次检查自定义块数量
         const count = (template.match(/\{\{\{(.*?)\}\}\}/g) || []).length;
@@ -531,25 +571,25 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 直接保存数据，不再处理 Base64
+        // 构造要保存的卡片对象
+        let cardToSave;
+
         if (editingCardId) {
-            // 编辑模式
-            const index = cards.findIndex(c => c.id === editingCardId);
-            if (index !== -1) {
-                cards[index] = {
-                    ...cards[index],
-                    title,
-                    type,
-                    contributor,
-                    template,
-                    precautions,
-                    exampleText,
-                    exampleImage: imagePath // 保存路径
-                };
-            }
+            // 编辑模式：找到旧卡片的数据（为了保留 hue 等未修改字段）
+            const oldCard = cards.find(c => c.id === editingCardId) || {};
+            cardToSave = {
+                ...oldCard, // 保留原有的 ID, hue 等
+                title,
+                type,
+                contributor,
+                template,
+                precautions,
+                exampleText,
+                exampleImage: imagePath
+            };
         } else {
             // 创建模式
-            const newCard = {
+            cardToSave = {
                 id: 'card_' + Date.now(),
                 title,
                 type,
@@ -557,15 +597,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 template,
                 precautions,
                 exampleText,
-                exampleImage: imagePath, // 保存路径
+                exampleImage: imagePath,
                 hue: getRandomHue()
             };
-            cards.push(newCard);
         }
 
-        // localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
-        // renderCards();
-        saveCards(); // 改为调用 saveCards
+        // 调用新的保存逻辑
+        saveCards(cardToSave);
 
         createModal.style.display = 'none';
         createForm.reset();
