@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 核心修改：保存前先拉取最新数据，进行合并
-    async function saveCards(newCard = null, deletedCardId = null, retryCount = 0) {
+    async function saveCards(newCard = null, deletedCardId = null, retryCount = 0, isLikeAction = false) {
         loader.style.display = 'flex'; // 显示加载动画
         try {
             // 1. 先从云端拉取最新数据 (获取最新的 ETag)
@@ -222,13 +222,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 如果是编辑（检查ID是否存在）
                 const index = latestCards.findIndex(c => c.id === newCard.id);
                 if (index !== -1) {
-                    // 编辑时，保留原有的点赞数和创建时间（除非 newCard 里已经有了）
-                    latestCards[index] = {
-                        ...latestCards[index],
-                        ...newCard,
-                        likes: latestCards[index].likes || 0, // 确保点赞数不丢失
-                        createdAt: latestCards[index].createdAt || Date.now()
-                    };
+                    if (isLikeAction) {
+                        // 点赞操作：基于服务器最新数据 +1
+                        latestCards[index].likes = (latestCards[index].likes || 0) + 1;
+                    } else {
+                        // 编辑操作：保留服务器端的点赞数和创建时间
+                        latestCards[index] = {
+                            ...latestCards[index],
+                            ...newCard,
+                            likes: latestCards[index].likes || 0, 
+                            createdAt: latestCards[index].createdAt || Date.now()
+                        };
+                    }
                 } else {
                     latestCards.push(newCard); // 新增
                 }
@@ -263,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (retryCount < 3) {
                     console.warn(`版本冲突，正在进行第 ${retryCount + 1} 次自动重试...`);
                     // 递归调用自己，重新拉取、合并、保存
-                    await saveCards(newCard, deletedCardId, retryCount + 1);
+                    await saveCards(newCard, deletedCardId, retryCount + 1, isLikeAction);
                     return;
                 } else {
                     throw new Error('服务器繁忙，多人同时操作冲突，请稍后再试。');
@@ -735,14 +740,8 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('liked_cards', JSON.stringify(likedCards));
 
         // 更新数据并保存
-        // 注意：这里我们只更新 likes 字段，不修改其他内容
-        const updatedCard = {
-            ...card,
-            likes: (card.likes || 0) + 1
-        };
-        
-        // 调用 saveCards，利用乐观锁机制同步到云端
-        saveCards(updatedCard);
+        // 只需要传 ID，并标记为点赞操作
+        saveCards({ id: card.id }, null, 0, true);
     }
 
     // 工具函数：转义 HTML 防止 XSS
